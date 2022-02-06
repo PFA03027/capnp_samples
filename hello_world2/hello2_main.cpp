@@ -13,7 +13,8 @@
 
 #include "gen/hello_if.capnp.h"
 
-#define UNIX_DOMAIN_SOCKET_PATH "unix:/tmp/capnp.hello2_main.socket"
+#define UNIX_DOMAIN_SOCKET_PATH "/tmp/capnp.hello2_main.socket"
+#define UNIX_DOMAIN_SOCKET_PATH_ADDR "unix:" UNIX_DOMAIN_SOCKET_PATH
 
 class AskHelloImpl final : public AskHello::Server
 {
@@ -33,7 +34,7 @@ public:
 void ask_hello_server(void)
 {
     // Set up a server.
-    capnp::EzRpcServer server(kj::heap<AskHelloImpl>(), UNIX_DOMAIN_SOCKET_PATH);
+    capnp::EzRpcServer server(kj::heap<AskHelloImpl>(), UNIX_DOMAIN_SOCKET_PATH_ADDR);
 
     // Write the port number to stdout, in case it was chosen automatically.
     auto &waitScope = server.getWaitScope();
@@ -57,7 +58,7 @@ void ask_hello_server(void)
 
 void ask_hello_client(void)
 {
-    capnp::EzRpcClient client(UNIX_DOMAIN_SOCKET_PATH);
+    capnp::EzRpcClient client(UNIX_DOMAIN_SOCKET_PATH_ADDR);
     AskHello::Client askhello_client = client.getMain<AskHello>();
 
     // Keep an eye on `waitScope`.  Whenever you see it used is a place where we
@@ -65,17 +66,21 @@ void ask_hello_client(void)
     // `waitScope`, then it does not block!
     auto &waitScope = client.getWaitScope();
 
-    // Set up the request.
-    auto request = askhello_client.askRequest();
-    request.setQuestion("How are you ?");
+    for (int i = 0; i < 100; i++)
+    {
 
-    // Send it, which returns a promise for the result (without blocking).
-    auto askPromise = request.send();
+        // Set up the request.
+        auto request = askhello_client.askRequest();
+        request.setQuestion("How are you ?");
 
-    // Now that we've sent all the requests, wait for the response.  Until this
-    // point, we haven't waited at all!
-    auto response = askPromise.wait(waitScope);
-    KJ_ASSERT(response.getResponse() == "Hello world");
+        // Send it, which returns a promise for the result (without blocking).
+        auto askPromise = request.send();
+
+        // Now that we've sent all the requests, wait for the response.  Until this
+        // point, we haven't waited at all!
+        auto response = askPromise.wait(waitScope);
+        KJ_ASSERT(response.getResponse() == "Hello world");
+    }
 
     printf("PASS\n");
 
@@ -84,14 +89,26 @@ void ask_hello_client(void)
 
 int main(void)
 {
-    std::thread server_thread(ask_hello_server);
-    sleep(1);
-    std::thread client_thread(ask_hello_client);
+    unlink(UNIX_DOMAIN_SOCKET_PATH);
 
-    if (client_thread.joinable())
+    std::thread server_thread(ask_hello_server);
+    sleep(1); // should wait unitil server start completion
+
+    std::thread client_threads[100];
+
+    for (int i = 0; i < 100; i++)
     {
-        client_thread.join();
+        client_threads[i] = std::thread(ask_hello_client);
     }
+
+    for (int i = 0; i < 100; i++)
+    {
+        if (client_threads[i].joinable())
+        {
+            client_threads[i].join();
+        }
+    }
+
     if (server_thread.joinable())
     {
         server_thread.join();
