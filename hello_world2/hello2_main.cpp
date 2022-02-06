@@ -16,6 +16,9 @@
 #define UNIX_DOMAIN_SOCKET_PATH "/tmp/capnp.hello2_main.socket"
 #define UNIX_DOMAIN_SOCKET_PATH_ADDR "unix:" UNIX_DOMAIN_SOCKET_PATH
 
+#define NUM_OF_ASK 10000
+#define NUM_OF_CLIENTS 100
+
 class AskHelloImpl final : public AskHello::Server
 {
     // Implementation of the Calculator Cap'n Proto interface.
@@ -23,7 +26,7 @@ class AskHelloImpl final : public AskHello::Server
 public:
     kj::Promise<void> ask(AskContext context) override
     {
-        printf("server get a question: %s\n", context.getParams().getQuestion().cStr());
+        // printf("server get a question: %s\n", context.getParams().getQuestion().cStr());
 
         context.getResults().setResponse("Hello world");
 
@@ -66,7 +69,7 @@ void ask_hello_client(void)
     // `waitScope`, then it does not block!
     auto &waitScope = client.getWaitScope();
 
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < NUM_OF_ASK; i++)
     {
 
         // Set up the request.
@@ -94,14 +97,14 @@ int main(void)
     std::thread server_thread(ask_hello_server);
     sleep(1); // should wait unitil server start completion
 
-    std::thread client_threads[100];
+    std::thread client_threads[NUM_OF_CLIENTS];
 
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < NUM_OF_CLIENTS; i++)
     {
         client_threads[i] = std::thread(ask_hello_client);
     }
 
-    for (int i = 0; i < 100; i++)
+    for (int i = 0; i < NUM_OF_CLIENTS; i++)
     {
         if (client_threads[i].joinable())
         {
